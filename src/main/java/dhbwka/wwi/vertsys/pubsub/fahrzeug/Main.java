@@ -9,7 +9,9 @@
  */
 package dhbwka.wwi.vertsys.pubsub.fahrzeug;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -46,7 +48,7 @@ public class Main {
 
         System.out.println();
         int index = Integer.parseInt(Utils.askInput("Zu fahrende Strecke", "0"));
-        
+
         // TODO: Methode parseItnFile() unten ausprogrammieren
         List<WGS84> waypoints = parseItnFile(new File(workdir, waypointFiles[index]));
 
@@ -60,13 +62,10 @@ public class Main {
         //
         // Die Nachricht muss dem MqttConnectOptions-Objekt übergeben werden
         // und soll an das Topic Utils.MQTT_TOPIC_NAME gesendet werden.
-        
         // TODO: Verbindung zum MQTT-Broker herstellen.
-
         // TODO: Statusmeldung mit "type" = "StatusType.VEHICLE_READY" senden.
         // Die Nachricht soll soll an das Topic Utils.MQTT_TOPIC_NAME gesendet
         // werden.
-        
         // TODO: Thread starten, der jede Sekunde die aktuellen Sensorwerte
         // des Fahrzeugs ermittelt und verschickt. Die Sensordaten sollen
         // an das Topic Utils.MQTT_TOPIC_NAME + "/" + vehicleId gesendet werden.
@@ -77,7 +76,7 @@ public class Main {
         Utils.fromKeyboard.readLine();
 
         vehicle.stopVehicle();
-        
+
         // TODO: Oben vorbereitete LastWill-Nachricht hier manuell versenden,
         // da sie bei einem regulären Verbindungsende nicht automatisch
         // verschickt wird.
@@ -109,9 +108,18 @@ public class Main {
     public static List<WGS84> parseItnFile(File file) throws IOException {
         List<WGS84> waypoints = new ArrayList<>();
 
-        // TODO: Übergebene Datei parsen und Liste "waypoints" damit füllen
-
+        try (BufferedReader br = new BufferedReader(new FileReader(file))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                String[] parts = line.split("\\|");
+                double longitude = Double.parseDouble(parts[0]);
+                longitude /= 100000.0;
+                double latitude = Double.parseDouble(parts[1]);
+                latitude /= 100000.0;
+                waypoints.add(new WGS84(longitude, latitude));
+            }
+        }
         return waypoints;
     }
-
 }
+
