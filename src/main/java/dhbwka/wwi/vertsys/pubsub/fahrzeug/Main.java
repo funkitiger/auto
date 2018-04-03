@@ -14,7 +14,12 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import org.eclipse.paho.client.mqttv3.MqttClient;
+import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
+import org.eclipse.paho.client.mqttv3.MqttMessage;
+import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 
 /**
  * Hauptklasse unseres kleinen Progrämmchens.
@@ -49,23 +54,36 @@ public class Main {
         System.out.println();
         int index = Integer.parseInt(Utils.askInput("Zu fahrende Strecke", "0"));
 
-        // TODO: Methode parseItnFile() unten ausprogrammieren
         List<WGS84> waypoints = parseItnFile(new File(workdir, waypointFiles[index]));
 
         // Adresse des MQTT-Brokers abfragen
         String mqttAddress = Utils.askInput("MQTT-Broker", Utils.MQTT_BROKER_ADDRESS);
 
-        // TODO: Sicherstellen, dass bei einem Verbindungsabbruch eine sog.
-        // LastWill-Nachricht gesendet wird, die auf den Verbindungsabbruch
-        // hinweist. Die Nachricht soll eine "StatusMessage" sein, bei der das
-        // Feld "type" auf "StatusType.CONNECTION_LOST" gesetzt ist.
-        //
-        // Die Nachricht muss dem MqttConnectOptions-Objekt übergeben werden
-        // und soll an das Topic Utils.MQTT_TOPIC_NAME gesendet werden.
-        // TODO: Verbindung zum MQTT-Broker herstellen.
+        MqttConnectOptions options = new MqttConnectOptions();
+        StatusMessage lastWill = new StatusMessage();
+        lastWill.vehicleId = vehicleId;
+        lastWill.type = StatusType.CONNECTION_LOST;
+
+        lastWill.message = "Verbindung zum Fahrzeug wurde getrennt.";
+        options.setWill(mqttAddress, lastWill.toJson(), 2, true);
+
+        MqttClient sampleClient = new MqttClient(Utils.MQTT_BROKER_ADDRESS, Utils.MQTT_TOPIC_NAME, new MemoryPersistence());
+        sampleClient.connect(options);
         // TODO: Statusmeldung mit "type" = "StatusType.VEHICLE_READY" senden.
+        SensorMessage status = new SensorMessage();
+        status.vehicleId = vehicleId;
+        status.running = true;
+        status.latitude = waypoints.get(index).latitude;
+        status.longitude = waypoints.get(index).longitude;
+        //status.rpm 
+        //status.kmh
+        //status.gear
+        status.type = StatusType.VEHICLE_READY.name();
+        MqttMessage message = new MqttMessage(status.toJson());
         // Die Nachricht soll soll an das Topic Utils.MQTT_TOPIC_NAME gesendet
         // werden.
+        sampleClient.publish(Utils.MQTT_TOPIC_NAME, message);
+
         // TODO: Thread starten, der jede Sekunde die aktuellen Sensorwerte
         // des Fahrzeugs ermittelt und verschickt. Die Sensordaten sollen
         // an das Topic Utils.MQTT_TOPIC_NAME + "/" + vehicleId gesendet werden.
@@ -122,4 +140,3 @@ public class Main {
         return waypoints;
     }
 }
-
