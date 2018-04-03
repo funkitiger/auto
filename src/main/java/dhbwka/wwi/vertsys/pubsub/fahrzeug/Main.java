@@ -16,6 +16,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
 import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
@@ -31,7 +33,7 @@ import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
  */
 public class Main {
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) throws Exception {        
         // Fahrzeug-ID abfragen
         String vehicleId = Utils.askInput("Beliebige Fahrzeug-ID", "postauto");
 
@@ -63,44 +65,58 @@ public class Main {
         StatusMessage lastWill = new StatusMessage();
         lastWill.vehicleId = vehicleId;
         lastWill.type = StatusType.CONNECTION_LOST;
-
         lastWill.message = "Verbindung zum Fahrzeug wurde getrennt.";
         options.setWill(mqttAddress, lastWill.toJson(), 2, true);
 
-        MqttClient sampleClient = new MqttClient(Utils.MQTT_BROKER_ADDRESS, Utils.MQTT_TOPIC_NAME, new MemoryPersistence());
+        MqttClient sampleClient = new MqttClient(mqttAddress, Utils.MQTT_TOPIC_NAME, new MemoryPersistence()); //TODO cliendId?
         sampleClient.connect(options);
-        // TODO: Statusmeldung mit "type" = "StatusType.VEHICLE_READY" senden.
-        SensorMessage status = new SensorMessage();
+        // Statusmeldung mit "type" = "StatusType.VEHICLE_READY" senden.
+        StatusMessage status = new StatusMessage();
         status.vehicleId = vehicleId;
-        status.running = true;
-        status.latitude = waypoints.get(index).latitude;
-        status.longitude = waypoints.get(index).longitude;
-        //status.rpm 
-        //status.kmh
-        //status.gear
-        status.type = StatusType.VEHICLE_READY.name();
-        MqttMessage message = new MqttMessage(status.toJson());
+        status.type = StatusType.VEHICLE_READY;
+        status.message = "Verbindung zum Fahrzeug hergestellt.";
+        
+        MqttMessage message = new MqttMessage();
+        message.setQos(2);
+        message.setPayload(status.toJson());
         // Die Nachricht soll soll an das Topic Utils.MQTT_TOPIC_NAME gesendet
         // werden.
         sampleClient.publish(Utils.MQTT_TOPIC_NAME, message);
+        System.out.println(message);
 
-        // TODO: Thread starten, der jede Sekunde die aktuellen Sensorwerte
+        // Thread starten, der jede Sekunde die aktuellen Sensorwerte
         // des Fahrzeugs ermittelt und verschickt. Die Sensordaten sollen
         // an das Topic Utils.MQTT_TOPIC_NAME + "/" + vehicleId gesendet werden.
         Vehicle vehicle = new Vehicle(vehicleId, waypoints);
         vehicle.startVehicle();
+        Timer timer = new Timer();
+        timer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                try {
+                    sampleClient.publish(Utils.MQTT_TOPIC_NAME + "/" + vehicleId, new MqttMessage(vehicle.getSensorData().toJson()));
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+            
+        }, 0, 1000);
 
         // Warten, bis das Programm beendet werden soll
         Utils.fromKeyboard.readLine();
-
+        timer.cancel();
         vehicle.stopVehicle();
 
-        // TODO: Oben vorbereitete LastWill-Nachricht hier manuell versenden,
+        // Oben vorbereitete LastWill-Nachricht hier manuell versenden,
         // da sie bei einem regulären Verbindungsende nicht automatisch
         // verschickt wird.
         //
         // Anschließend die Verbindung trennen und den oben gestarteten Thread
         // beenden, falls es kein Daemon-Thread ist.
+        sampleClient.publish(Utils.MQTT_TOPIC_NAME, new MqttMessage(lastWill.toJson()));
+        //System.out.println(lastWill.toJson().toString());
+        sampleClient.disconnect();
+        System.exit(0);
     }
 
     /**
