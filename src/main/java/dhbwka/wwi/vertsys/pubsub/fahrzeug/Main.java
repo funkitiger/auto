@@ -150,7 +150,7 @@ public class Main {
                 longitude /= 100000.0;
                 double latitude = Double.parseDouble(parts[1]);
                 latitude /= 100000.0;
-                waypoints.add(new WGS84(longitude, latitude));
+                waypoints.add(new WGS84(latitude, longitude));
             }
         }
         return waypoints;
